@@ -147,7 +147,7 @@ class Sieve(object):
             x = next_layer.transform(x)
             if self.verbose:
                 print 'tc: %0.3f, (+) %0.3f, (-) %0.3f' % (next_layer.corex.tc, next_layer.ub, next_layer.lb)
-            if next_layer.corex.tc > 2*max(2 * next_layer.ub + next_layer.lb, 1. / n_samples):  # Lower bound still increasing
+            if next_layer.corex.tc > max(2 * next_layer.ub + next_layer.lb, 1. / n_samples):  # Lower bound still increasing
                 self.layers.append(next_layer)
             else:
                 break
@@ -172,18 +172,13 @@ class SieveLayer(object):
 
     """
     def __init__(self, x, **kwargs):
-        k_max = kwargs.pop('k_max', 2)  # Sets cardinality for Remainder objects
+        k_max = kwargs.pop('k_max', 2)  # Sets max cardinality for Remainder objects
+        self.verbose = kwargs.get('verbose', False)
         self.corex = ce.Corex(**kwargs).fit(x)
         self.labels = self.corex.labels
-        np.set_printoptions(threshold=10000)
-        print 'ys'
-        print repr(self.labels)
-        for xs in x.T:
-            print repr(xs)
         self.remainders = [re.Remainder(xs[xs >= 0], self.labels[xs >= 0], k_max=k_max) for xs in x.T]
         if kwargs.get('verbose', False):
-            print 'tc: %0.3f' % self.corex.tc
-            print 'ub, lb', self.ub, self.lb
+            print 'z cardinalities', [r.pz_xy.shape[0] for r in self.remainders]
 
     # These functions define the transformation and prediction. In principle, many alternatives could be tried.
     # But we have chosen to minimize the gap between upper and lower bounds.

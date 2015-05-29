@@ -82,10 +82,3 @@ def test_invertibility():
     assert np.all(xs == predict_xs), predict_xs
     assert g.h < 0.01, "%0.5f" % g.h
     assert g.mi < 0.1, "%0.5f" % g.mi
-
-def test_optimize():
-    # Check whether the jacobian is approximately correct by comparing to finite difference
-    from scipy.optimize import check_grad
-    out = re.Remainder([0,0,1,1,2,2], [0,1,0,0,1,1], k_max=2)
-    error = check_grad(out.objective, out.objective_jac, np.ravel(re.normalize_z(np.random.random(out.shape))))
-    assert error < 1e-5, error

@@ -309,9 +309,6 @@ class Corex(object):
     def print_verbose(self):
         if self.verbose:
             print self.tcs,
-        if self.verbose > 1:
-            if hasattr(self, "mis"):
-                print self.mis[:, :, 0]
 
     def convergence(self):
         if len(self.tc_history) > 10:
