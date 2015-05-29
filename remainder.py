@@ -8,6 +8,7 @@ class Remainder(object):
         self.xset, self.yset = sorted(list(set(xs))), sorted(list(set(ys)))
         k_x, k_y = len(self.xset), len(self.yset)
         self.shape = (k_max, k_x, k_y)
+        self.n_samples = len(xs)
 
         counts = np.array([[np.sum((xs == x) * (ys == y)) for y in self.yset] for x in self.xset])
         self.pxy = laplace(counts)
@@ -44,7 +45,8 @@ class Remainder(object):
 
         if not np.array_equal(self.pz_xy, self.identity):
             # self.cleanup(xs, ys)
-            self.merge(PTbias)
+            self.merge()
+        assert np.allclose(np.sum(self.pz_xy, axis=0), 1), 'normalization'
 
     @property
     def identity(self):
@@ -145,9 +147,23 @@ class Remainder(object):
 
         return self
 
-    def merge(self, bias):
-        # Merge z's as long as h(x|yz) is below bias.
-        pass
+    def merge(self):
+        # Merge z's as long as I(Z;Y) is below bias.
+        if self.pz_xy.shape[0] > 1:
+            pz = np.sum(self.pz_xy * self.pxy, axis=(1,2))
+
+            q = np.argmin(pz)
+            p = self.pz_xy.copy()
+            extra_mass = p[q]
+            p = np.delete(p, q, axis=0)
+            for (i, j), v in np.ndenumerate(extra_mass):
+                p[np.argmax(p[:, i, j]), i, j] += v
+
+            k_z, k_x, k_y = p.shape
+            PTbias = float((k_z - 1) * (k_y - 1)) / self.n_samples  # Panzeri-Treves bias in MI estimate
+            if self.get_mi(p) < PTbias and self.get_h(p) < 1e-6:
+                self.pz_xy = p
+                self.merge()
 
     def cleanup(self, xs, ys):
         # Eliminate unused z values
@@ -207,7 +223,7 @@ def histograms(pxy):
     nx, ny = pxy.shape
     py = np.sum(pxy, axis=0, keepdims=True)
     px_y = (pxy / py).T
-    order = np.argsort(-px_y, axis=1)
+    order = np.argsort(-px_y, axis=1)  # In principle we could optimize over the order. This seemed like a good heuristic...
     px_y = np.array([px_y[i, order[i]] for i in range(ny)])
     cum = np.cumsum(px_y, axis=1)
     splits = sorted(list(set(np.ravel(cum))))  # TODO: we should merge splits if they are small (effect on h(x|zy) is within bias)
