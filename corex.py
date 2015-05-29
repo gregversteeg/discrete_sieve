@@ -177,8 +177,6 @@ class Corex(object):
                 if self.convergence():
                     break
 
-            if self.verbose:
-                print 'Overall tc:', self.tc
             if self.tc > best_tc:
                 best_tc = self.tc
                 best_dict = self.__dict__.copy()
@@ -310,9 +308,8 @@ class Corex(object):
 
     def print_verbose(self):
         if self.verbose:
-            print self.tcs
+            print self.tcs,
         if self.verbose > 1:
-            print self.theta
             if hasattr(self, "mis"):
                 print self.mis[:, :, 0]
 
@@ -334,13 +331,16 @@ class Corex(object):
         return pickle.load(open(filename))
     
     def sort_and_output(self, Xm):
-        if not hasattr(self, 'mis'):
-            # self.update_marginals(Xm, self.p_y_given_x)
-            log_marg_x = self.calculate_marginals_on_samples(self.theta, Xm)  # n_hidden, n_samples, n_visible, dim_hidden
-            self.mis = self.calculate_mis(self.p_y_given_x, log_marg_x)
-        bias, sig = self.mi_bootstrap(Xm, n_permutation=20)
+        p_y_given_x_stochastic = np.round(self.p_y_given_x)
+        theta = self.calculate_theta(Xm, p_y_given_x_stochastic)
+        log_marg_x = self.calculate_marginals_on_samples(theta, Xm)  # n_hidden, n_samples, n_visible, dim_hidden
+        self.mis = self.calculate_mis(p_y_given_x_stochastic, log_marg_x)
+
+        bias, sig = self.mi_bootstrap(Xm, p_y_given_x_stochastic, n_permutation=20)
         self.mis = (self.mis - bias) * (self.mis > sig)
         self.mis = self.mis[0, :, 0]
+        if self.verbose > 1:
+            print self.mis
 
         # Sort y values to match with the most closely correlated xi
         top_var = np.argmax(self.mis)
@@ -357,11 +357,11 @@ class Corex(object):
         mis = np.sum(p_y_given_x[:, :, np.newaxis, :] * log_marg_x, axis=(1, 3)) / self.n_observed_xi
         return mis[:, :, np.newaxis]  # MI in nats
 
-    def mi_bootstrap(self, Xm, n_permutation=20):
+    def mi_bootstrap(self, Xm, p_y_given_x, n_permutation=20):
         # est. if p-val < 1/n_permutation = 0.05
         mis = np.zeros((self.n_hidden, self.n_visible, n_permutation))
         for j in range(n_permutation):
-            p_y_given_x = self.p_y_given_x[:, np.random.permutation(self.n_samples), :]
+            p_y_given_x = p_y_given_x[:, np.random.permutation(self.n_samples), :]
             theta = self.calculate_theta(Xm, p_y_given_x)
             log_marg_x = self.calculate_marginals_on_samples(theta, Xm)  # n_hidden, n_samples, n_visible, dim_hidden
             mis[:, :, j] = self.calculate_mis(p_y_given_x, log_marg_x)[:, :, 0]
@@ -383,7 +383,7 @@ class Corex(object):
         if self.smooth_marginals:  # Shrinkage interpreted as hypothesis testing...
             G_stat = 2 * np.sum(np.where(counts > 0, counts * (np.log(counts) - np.log(n_obs * prior)), 0), axis=0)
             G0 = self.estimate_sig(x_select, p_y_given_x, n_obs, prior)
-            z = 2
+            z = 1
             lam = G_stat**z / (G_stat**z + G0**z)
             lam = np.where(np.isnan(lam), 0.5, lam)
             p = (1 - lam) * prior + lam * p

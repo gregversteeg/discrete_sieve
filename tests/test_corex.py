@@ -11,8 +11,7 @@ seed = 1
 
 # Random -> TC = 0
 
-def generate_data(n_samples=100, group_sizes=[2], missing=0):
-    dim_hidden = 2
+def generate_data(n_samples=100, group_sizes=[2], missing=0, dim_hidden=2):
     Y_true = [np.random.randint(0, dim_hidden, n_samples) for _ in group_sizes]
     X = np.hstack([np.repeat(Y_true[i][:,np.newaxis], size, axis=1) for i, size in enumerate(group_sizes)])
     clusters = [i for i in range(len(group_sizes)) for _ in range(group_sizes[i])]
@@ -36,12 +35,13 @@ def generate_noisy_data(n_samples=100, group_sizes=[2], erasure_p=0):
     return counts, Y_true, clusters, tcs
 
 def check_correct(clusters, tcs, Y_true, counts, corex):
-    print corex.labels
+    true_labels = Y_true[np.argmax(tcs)]
+    print zip(corex.labels, true_labels)
+    observed_label_correspondence = set(map(tuple, zip(corex.labels, true_labels)))
+    print observed_label_correspondence
     assert np.array_equal(corex.transform(counts), corex.labels)  # Correctness of transform
     assert np.allclose(corex.tc, np.max(tcs), atol=0.001, rtol=0.1), "TC error: %f, %f" % (corex.tc, np.max(tcs))
-    true_labels = Y_true[np.argmax(tcs)]
     assert len(true_labels) == len(corex.labels)
-    observed_label_correspondence = set(map(tuple, zip(corex.labels, true_labels)))
     assert len(observed_label_correspondence) == len(set(true_labels)), "Inferred labels exactly equal labels in data"
     assert set(np.where(np.array(clusters) == 0)[0]) == set(np.where(corex.mis > 0.)[0]), "MI identifies correct clusters."
 
@@ -57,15 +57,29 @@ def test_BinaryGaussianCorEx():
         f.description = 'groups:' + str(group_sizes) + ' seed: '+str(seed)
         yield (f, )
 
+def test_large_k():
+    n_samples = 300
+    d=10
+    np.random.seed(seed)
+    counts, Y_true, clusters, tcs = generate_data(n_samples=n_samples, group_sizes=[3], dim_hidden=d)
+    counts_n = np.hstack([counts, np.random.randint(0,d,(n_samples,5))])
+    method = ce.Corex(seed=seed, n_repeat=10,  dim_hidden=d, verbose=verbose, smooth_marginals=True).fit(counts_n)
+    print method.mis
+
+    f = partial(check_correct, clusters, tcs, Y_true, counts_n, method)
+    update_wrapper(f, check_correct)
+    f.description = 'large k'
+    yield (f, )
+
 def test_near_shannon_limit():
     counts, Y_true, clusters, tcs = generate_noisy_data(n_samples=1000, group_sizes=[200], erasure_p=1.-3./200)
-    out = ce.Corex(seed=seed, verbose=verbose).fit(counts)
+    out = ce.Corex(n_hidden=1, seed=seed, verbose=verbose).fit(counts)
     out_labels = np.rint(out.labels).astype(int)
     frac_correct = max(np.mean(Y_true[0] == out_labels), 1-np.mean(Y_true[0] == out_labels.T))
     assert frac_correct > 0.94, 'fraction correct should be high: %f' % frac_correct  # rate = 3*capacity, near perfect
 
     counts, Y_true, clusters, tcs = generate_noisy_data(n_samples=1000, group_sizes=[200], erasure_p=1.-1./200)
-    out = ce.Corex(seed=seed, verbose=verbose).fit(counts)
+    out = ce.Corex(n_hidden=1, seed=seed, verbose=verbose).fit(counts)
     out_labels = np.rint(out.labels).astype(int)
     assert max(np.mean(Y_true[0] == out_labels), 1-np.mean(Y_true[0] == out_labels)) < 0.9  # rate=capacity, not perfect
 
@@ -74,9 +88,9 @@ def test_stable_solution_with_many_starting_points():
                           [1, 1]], dtype=int), 10, axis=0)
     n_correct = []
     for i in range(10):
-        this_tc = ce.Corex(seed=i, smooth_marginals=True).fit(test_data).tc
+        this_tc = ce.Corex(seed=i, verbose=verbose, smooth_marginals=False).fit(test_data).tc
         print this_tc
-        n_correct.append(this_tc > 0.66)
+        n_correct.append(this_tc > 0.64)
     assert np.all(n_correct), "number correct %d / %d" % (np.sum(n_correct), len(n_correct))
 
 def test_no_tc_in_random():

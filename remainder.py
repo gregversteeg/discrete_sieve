@@ -3,8 +3,7 @@ from scipy import optimize
 import sys
 
 class Remainder(object):
-    def __init__(self, xs, ys, k_max=2, deterministic=False):
-        self.deterministic = deterministic
+    def __init__(self, xs, ys, k_max=2, exact=True):
         xs, ys = np.asarray(xs), np.asarray(ys)
         self.xset, self.yset = sorted(list(set(xs))), sorted(list(set(ys)))
         k_x, k_y = len(self.xset), len(self.yset)
@@ -16,16 +15,36 @@ class Remainder(object):
         self.pz_xy = self.identity  # p(z | x, y), the identity for z = x
         self.identity_mi = self.mi
 
-        if k_max == -1:
-            k_max = k_x
-            while True:
-                self.shape = (k_max, k_x, k_y)
-                self.fit()
-                if self.h < 1. / len(xs) and self.mi < 0.1 * self.identity_mi:
-                    break
-                k_max += 1
+        PTbias = float((k_x - 1) * (k_y - 1)) / len(xs)  # Panzeri-Treves bias in MI estimate
+        if self.identity_mi < PTbias:
+            print 'use identity, we are within bias of zero MI'
+            pass
+        elif exact:
+            self.pz_xy = histograms(self.pxy)
         else:
-            self.fit()
+            k = 1
+            old_objective = np.inf
+            while True:
+                self.shape = (k, k_x, k_y)
+                self.fit()
+                print 'k, h, mi, h(y), ident', k, self.h, self.mi, self.h_y, self.identity_mi
+                if self.h < min(0.001, 1. / len(xs)) and self.mi < min(0.001, 1. / len(xs)):
+                    break
+                new_objective = self.objective(self.pz_xy)
+                if (new_objective >= old_objective and new_objective > self.identity_mi) or k > k_max:  # No more improvement
+                    print 'warning: stopping w suboptimal k because of ' \
+                           'no more improvement... problems with high-d optimization.'
+                    self.pz_xy = old_solution
+                    self.shape = old_shape
+                    break
+                old_solution = self.pz_xy.copy()
+                old_shape = self.shape
+                old_objective = new_objective
+                k += 1
+
+        if not np.array_equal(self.pz_xy, self.identity):
+            # self.cleanup(xs, ys)
+            self.merge(PTbias)
 
     @property
     def identity(self):
@@ -56,6 +75,10 @@ class Remainder(object):
     @property
     def h(self):
         return self.get_h()
+
+    @property
+    def h_y(self):
+        return entropy_f(self.marginal((0, 1), self.identity))
 
     def get_mi(self, p=None):
         """ I(Z; Y), ideally this will be zero. """
@@ -114,43 +137,44 @@ class Remainder(object):
                 best_res = res.x
                 best_f = res.fun
         if best_f >= self.identity_mi:
+            print 'prefer identity'
             self.pz_xy = self.identity
             self.shape = self.identity.shape
         else:
             self.pz_xy = normalize_z(best_res.reshape(self.shape))
 
-        self.cleanup()
         return self
 
-    def cleanup(self):
+    def merge(self, bias):
+        # Merge z's as long as h(x|yz) is below bias.
+        pass
+
+    def cleanup(self, xs, ys):
         # Eliminate unused z values
         inds = np.sum(self.pz_xy, axis=(1, 2)) > 1e-6
-        self.pz_xy = self.pz_xy[inds]
+        self.pz_xy = normalize_z(self.pz_xy[inds])
 
         # Sort z values in meaningful way.
-        pzx = self.marginal(2)
-        pz = self.marginal((1, 2))
-        old_settings = np.seterr()
-        np.seterr(invalid='ignore')
-        px_z = pzx / pz[:, np.newaxis]
-        np.seterr(**old_settings)
-
-        exp_x = np.mean(np.array(self.xset)[np.newaxis, :] * px_z, axis=1)
-        exp_x = np.where(np.isnan(exp_x), np.inf, exp_x)
-        order = np.argsort(exp_x)
+        # pzx = self.marginal(2)
+        # pz = self.marginal((1, 2))
+        # old_settings = np.seterr()
+        # np.seterr(invalid='ignore')
+        # px_z = pzx / pz[:, np.newaxis]
+        # np.seterr(**old_settings)
+        #
+        # exp_x = np.mean(np.array(self.xset)[np.newaxis, :] * px_z, axis=1)
+        # exp_x = np.where(np.isnan(exp_x), np.inf, exp_x)
+        # order = np.argsort(exp_x)
+        zs = self.transform(xs, ys)
+        order = np.argsort(np.bincount(zs, minlength=self.pz_xy.shape[0]))[::-1]
         self.pz_xy = self.pz_xy[order]
-
-        # Round to deterministic solutions (will make bounds worse if k_max is not big enough)
-        # I can't really see the point of this... Should probably eliminate.
-        if self.deterministic:
-            self.pz_xy = np.round(self.pz_xy)
 
     def transform(self, xs, ys):
         """ A probabilistic transform of x and y into z. We use set the seed so that we get deterministic results
         in the sense that when we transform the same data, we will always get the exact same result. (Even though
         each transformation might be probabilistic)
         """
-        np.random.seed(0)  # Always use the same seed for transformation...to get deterministic results.
+        np.random.seed(0)  # Always use the same seed for transformation...to get deterministic results.r
         return np.array([self.stochastic_label(x, y) for x, y in zip(xs, ys)])
 
     def predict(self, ys, zs):
@@ -178,6 +202,30 @@ class Remainder(object):
             return np.nonzero(np.random.multinomial(1, pz))[0][0]
         else:
             return -1
+
+def histograms(pxy):
+    nx, ny = pxy.shape
+    py = np.sum(pxy, axis=0, keepdims=True)
+    px_y = (pxy / py).T
+    order = np.argsort(-px_y, axis=1)
+    px_y = np.array([px_y[i, order[i]] for i in range(ny)])
+    cum = np.cumsum(px_y, axis=1)
+    splits = sorted(list(set(np.ravel(cum))))  # TODO: we should merge splits if they are small (effect on h(x|zy) is within bias)
+    pz_xy = np.zeros((len(splits), nx, ny))
+    for i in range(nx):
+        for j in range(ny):
+            right = cum[j, i]
+            left = 0. if i == 0 else cum[j, i-1]
+            delta = right - left
+            if delta > 0:
+                for k in range(len(splits)):
+                    z_right = splits[k]
+                    z_left = 0. if k == 0 else splits[k-1]
+                    z_delta = z_right - z_left
+                    if z_right <= right and z_left >= left:
+                        pz_xy[k, order[j][i], j] = z_delta / delta
+    pz_xy = np.where(np.sum(pz_xy, axis=0) == 0, 1. / len(splits), pz_xy)
+    return pz_xy
 
 
 def normalize_z(mat):

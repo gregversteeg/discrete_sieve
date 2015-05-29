@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 
 # Visualization utilities
 def output_dot(sieve, column_labels=None, max_edges=None, filename='structure.dot'):
@@ -53,19 +54,17 @@ def output_plots(sieve, x, column_labels=None, prefix='', topk=6):
         pass
     if column_labels is None:
         column_labels = map(unicode, range(sieve.n_variables))
-    data = np.where(x >= 0, x, np.nan)
 
     for j, y in enumerate(sieve.labels.T):
         inds = np.nonzero(sieve.mis[j, :sieve.n_variables])[0]
         inds = inds[np.argsort(- sieve.mis[j, inds])[:topk]]
         if len(inds) >= 2:
-            plot_rels(data[:, inds], y, map(lambda q: column_labels[q], inds),
+            plot_rels(x[:, inds], y, map(lambda q: column_labels[q], inds),
                       prefix + 'relationships/group_num='+str(j))
     return True
 
 
-def plot_rels(data, colors, labels, outfile):
-    import pylab
+def plot_rels(data, zs, labels, outfile):
     from itertools import combinations
     ns, n = data.shape
     if labels is None:
@@ -73,12 +72,18 @@ def plot_rels(data, colors, labels, outfile):
     ncol = 5
     nrow = int(np.ceil(float(n * (n-1) / 2) / ncol))
 
-    fig, axs = pylab.subplots(nrow, ncol)
+    fig, axs = plt.subplots(nrow, ncol)
     fig.set_size_inches(5 * ncol, 5 * nrow)
     pairs = list(combinations(range(n), 2))
 
     for ax, pair in zip(axs.flat, pairs):
-        ax.scatter(data[:, pair[0]], data[:, pair[1]], c=colors, cmap=pylab.get_cmap("jet"), marker='.', alpha=0.5)
+        xs, ys = data[:, pair[0]], data[:, pair[1]]
+        inds = np.logical_and(xs>=0, ys>=0)
+        xs, ys, zs = xs[inds], ys[inds], zs[inds]
+        xset, yset = sorted(list(set(xs))), sorted(list(set(ys)))
+        n = len(xs)
+        ps = np.array([[np.sum((xs == x) * (ys == y)) for y in yset] for x in xset]).astype(float) / n
+        hinton(ps, ax=ax)
 
     ax.set_xlabel(shorten(labels[pair[0]]))
     ax.set_ylabel(shorten(labels[pair[1]]))
@@ -86,13 +91,13 @@ def plot_rels(data, colors, labels, outfile):
     for ax in axs.flat[axs.size - 1:len(pairs) - 1:-1]:
         ax.scatter(data[:, 0], data[:, 1], marker='.')
 
-    pylab.rcParams['font.size'] = 12
-    pylab.draw()
+    plt.rcParams['font.size'] = 12
+    plt.draw()
     fig.tight_layout()
     for ax in axs.flat[axs.size - 1:len(pairs) - 1:-1]:
         ax.set_visible(False)
     fig.savefig(outfile + '.png')
-    pylab.close('all')
+    plt.close('all')
     return True
 
 
@@ -100,3 +105,35 @@ def shorten(s, n=12):
     if len(s) > 2 * n:
         return s[:n] + '..' + s[-n:]
     return s
+
+
+def hinton(matrix, max_weight=None, ax=None):
+    """
+    Demo of a function to create Hinton diagrams.
+
+    Hinton diagrams are useful for visualizing the values of a 2D array (e.g.
+    a weight matrix): Positive and negative values are represented by white and
+    black squares, respectively, and the size of each square represents the
+    magnitude of each value.
+
+    Initial idea from David Warde-Farley on the SciPy Cookbook
+    """
+    ax = ax if ax is not None else plt.gca()
+
+    if not max_weight:
+        max_weight = 1
+
+    ax.patch.set_facecolor('gray')
+    ax.set_aspect('equal', 'box')
+    ax.xaxis.set_major_locator(plt.NullLocator())
+    ax.yaxis.set_major_locator(plt.NullLocator())
+
+    for (x,y), w in np.ndenumerate(matrix):
+        color = 'black'  # TODO: add y based color here.
+        size = w
+        rect = plt.Rectangle([x - size / 2, y - size / 2], size, size,
+                             facecolor=color, edgecolor=color)
+        ax.add_patch(rect)
+
+    ax.autoscale_view()
+    ax.invert_yaxis()

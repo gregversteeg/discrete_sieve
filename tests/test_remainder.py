@@ -16,8 +16,8 @@ def test_null():
     assert np.all(xs == predict_xs), predict_xs
 
 def test_perfect():
-    xs = [0, 0, 1, 1, 1, 0]
-    ys = [0, 0, 0, 1, 1, 1]
+    xs = np.repeat([0, 0, 1, 1, 1, 0], 5)
+    ys = np.repeat([0, 0, 0, 1, 1, 1], 5)
     g = re.Remainder(xs, ys, k_max=2)
     zs = g.transform(xs, ys)
     print zip(xs, ys, zs)
@@ -72,7 +72,7 @@ def test_identity():
 def test_invertibility():
     xs = np.random.randint(0, 5, 100)
     ys = xs / 2 + np.random.randint(0, 2, 100)
-    g = re.Remainder(xs, ys, k_max=-1)
+    g = re.Remainder(xs, ys, k_max=8)
     zs = g.transform(xs, ys)
     print 'mi, h', g.mi, g.h
     print zip(xs, ys, zs)

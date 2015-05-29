@@ -13,7 +13,7 @@ def test_invertibility():
     x_count_a = np.random.randint(0, 5, (ns, 1)) + np.random.randint(0, 1, (ns, n))
     x_count_b = np.random.randint(0, 5, (ns, 1)) + np.random.randint(0, 1, (ns, n))
     x_count = np.hstack([x_count_a, x_count_b])
-    out = sieve.Sieve(max_layers=2, verbose=verbose, seed=seed, k_max=-1).fit(x_count)
+    out = sieve.Sieve(max_layers=2, verbose=verbose, seed=seed, k_max=7).fit(x_count)
     print 'stats for each layer'
     print [[r.h for r in layer.remainders] for layer in out.layers]
     xbar, labels = out.transform(x_count)
@@ -27,14 +27,22 @@ def test_invertibility():
 def test_k_max():
     np.random.seed(seed)
     n, ns = 3, 300
-    x_count_a = np.random.randint(0, 5, (ns, 1)) + np.random.randint(0, 1, (ns, n))
+    x_count_a = np.random.randint(0, 5, (ns, 1)) + np.random.randint(0, 1, (ns, n+1))  # NOISELESS
     x_count_b = np.random.randint(0, 5, (ns, 1)) + np.random.randint(0, 1, (ns, n))
     x_count = np.hstack([x_count_a, x_count_b])
-    out = sieve.Sieve(max_layers=3, dim_hidden=5, verbose=True, seed=seed, k_max=5).fit(x_count)
+
+    out = sieve.Sieve(max_layers=3, dim_hidden=5, verbose=verbose, seed=seed, k_max=7, n_repeat=10).fit(x_count)
     print len(out.layers)
+    print x_count[:10]
+    print out.layers[0].labels[:10]
+    print out.layers[1].labels[:10]
+    print 'r0 at l0', out.layers[0].remainders[0].pz_xy
+    print 'r5 at l0', out.layers[0].remainders[5].pz_xy
     print ['tc: %0.3f (-) %0.3f (+) %0.3f' % (layer.corex.tc, layer.lb, layer.ub) for layer in out.layers]
     assert len(out.layers) == 2, "2 latent factors of cardinality 5 should be enough."
     xbar, labels = out.transform(x_count)
+    print 'pred', out.invert(xbar)[:10]
+    print 'true', x_count[:10]
     assert np.allclose(out.invert(xbar), x_count)
 
 
@@ -45,6 +53,7 @@ def test_sieve():
     s = sieve.Sieve(max_layers=5, verbose=verbose, seed=seed).fit(test_data)
     assert len(s.layers) == 1, \
         'Only one layer is needed. TC and remainder at level 0: %f, %f' % (s.tc, s.lb)
+    print s.transform(test_data)
     assert np.allclose(s.transform(test_data)[0][:, :-1], 0., atol=1e-4), \
         'Residual info should be small. Largest value was: %f' % np.max(np.absolute(s.transform(test_data)[0][:, :-1]))
     xbar, labels = s.transform(test_data)
@@ -87,12 +96,12 @@ def test_structure():
     assert np.allclose(s.mis[:, -1], 0), 'Latent factors should not be correlated.'
 
 def test_vis():
-    ns = 200
+    ns = 100
     xa = np.random.randint(0, 3, (ns, 1))
     xb = np.random.randint(0, 3, (ns, 1))
     xc = np.random.randint(0, 3, (ns, 1))
     test_data = np.hstack([np.repeat(xa, 7, axis=1), np.repeat(xb, 5, axis=1), np.repeat(xc, 3, axis=1)])
-    s = sieve.Sieve(max_layers=5, verbose=verbose, seed=seed).fit(test_data)
+    s = sieve.Sieve(max_layers=2, k_max=3, dim_hidden=3, verbose=verbose, seed=seed, n_repeat=1).fit(test_data)
     vis.output_dot(s, filename='test.dot')
     vis.output_plots(s, test_data)
 
