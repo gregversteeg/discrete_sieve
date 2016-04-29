@@ -1,11 +1,7 @@
 """Information Sieve
 
-An extension of ideas in this paper:
-Greg Ver Steeg and Aram Galstyan. "Maximally Informative
-Hierarchical Representations of High-Dimensional Data"
-AISTATS, 2015. arXiv preprint arXiv:1410.7404.
-
-Paper in progress
+Greg Ver Steeg and Aram Galstyan. "The Information Sieve"
+ICML 2016. http://arxiv.org/abs/1507.02284
 
 Code below written by:
 Greg Ver Steeg (gregv@isi.edu), 2015.
@@ -14,6 +10,7 @@ Greg Ver Steeg (gregv@isi.edu), 2015.
 import numpy as np  # Tested with 1.8.0
 import corex as ce
 import remainder as re
+
 
 class Sieve(object):
     """
@@ -62,6 +59,9 @@ class Sieve(object):
             Hierarchical Representations of High-Dimensional Data"
             AISTATS, 2015. arXiv preprint arXiv:1410.7404.
 
+    [3]     Greg Ver Steeg and Aram Galstyan. "The Information Sieve"
+            ICML 2016.
+
     """
 
     def __init__(self, max_layers=10, data_format='default', **kwargs):
@@ -70,6 +70,7 @@ class Sieve(object):
         self.kwargs = kwargs
         self.verbose = kwargs.get('verbose', False)
         self.layers = []
+        self.x_stats = []
 
     @property
     def labels(self):
@@ -89,7 +90,7 @@ class Sieve(object):
 
     @property
     def tc(self):
-        return np.sum(tcs)
+        return np.sum(self.tcs)
 
     @property
     def lb(self):
@@ -124,7 +125,7 @@ class Sieve(object):
             return self.transform(x_out, layer=layer+1, prev_labels=labels)
 
     def invert(self, x, layer=None):
-        # From remainder info and labels, reconstruct input.
+        """From remainder info and labels, reconstruct input."""
         if layer is None:
             layer = len(self.layers) - 1
 
@@ -134,10 +135,22 @@ class Sieve(object):
             return self.invert(self.layers[layer].invert(x), layer=layer-1)
 
     def predict(self, y):
-        # TODO: change and add test
-        # Just invert with xbar = 0.
-        xbar = np.hstack([np.zeros((len(y), self.n_variables)), y])
-        return self.invert(xbar)
+        return np.array([self.predict_variable(y, i) for i in range(self.n_variables)]).T
+
+    def predict_variable(self, ys, i):
+        most_likely = []
+        for y in ys:
+            prediction = np.zeros(100)  # TODO: pick correct number (keep x_stats for all levels?)
+            for xi, nxi in enumerate(self.x_stats[i]):
+                x_pred = self.invert_variable(xi, y, i)
+                prediction[x_pred] += nxi
+            most_likely.append(np.argmax(prediction))
+        return np.array(most_likely)
+
+    def invert_variable(self, zi, y, i):
+        for k, layer in reversed(list(enumerate(self.layers))):
+            zi = layer.remainders[i].predict([y[k]], [zi])[0]
+        return zi
 
     def fit(self, x):
         n_samples, self.n_variables = x.shape
@@ -147,11 +160,15 @@ class Sieve(object):
             x = next_layer.transform(x)
             if self.verbose:
                 print 'tc: %0.3f, (+) %0.3f, (-) %0.3f' % (next_layer.corex.tc, next_layer.ub, next_layer.lb)
-            if next_layer.corex.tc > max(2 * next_layer.ub + next_layer.lb, 1. / n_samples):  # Lower bound still increasing
+            #if next_layer.corex.tc - 2 * next_layer.ub - next_layer.lb > 1. / n_samples:  # Lower bound still increasing
+            if next_layer.corex.tc - next_layer.lb > 1. / n_samples:  # Lower bound still increasing
                 self.layers.append(next_layer)
+                self.x_stats = [np.bincount(x[x[:, i] >= 0, i]) for i in range(self.n_variables)]
             else:
                 break
 
+        if self.verbose:
+            print ['tc: %0.3f (-) %0.3f (+) %0.3f' % (layer.corex.tc, layer.lb, layer.ub) for layer in self.layers]
         return self
 
 
@@ -177,15 +194,16 @@ class SieveLayer(object):
         self.corex = ce.Corex(**kwargs).fit(x)
         self.labels = self.corex.labels
         self.remainders = [re.Remainder(xs[xs >= 0], self.labels[xs >= 0], k_max=k_max) for xs in x.T]
-        if kwargs.get('verbose', False):
+        if self.verbose:
             print 'z cardinalities', [r.pz_xy.shape[0] for r in self.remainders]
 
     # These functions define the transformation and prediction. In principle, many alternatives could be tried.
     # But we have chosen to minimize the gap between upper and lower bounds.
     def transform(self, x):
         """Transform data into hidden factors + remainder info"""
-        xr = np.array([self.remainders[i].transform(x[:, i], self.labels) for i in range(x.shape[1])]).T
-        return np.hstack([xr, self.labels[:, np.newaxis]])
+        labels = self.corex.transform(x)
+        xr = np.array([self.remainders[i].transform(x[:, i], labels) for i in range(x.shape[1])]).T
+        return np.hstack([xr, labels[:, np.newaxis]])
 
     def invert(self, xr):
         """Recover x from y and remainder information."""

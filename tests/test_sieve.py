@@ -31,7 +31,7 @@ def test_k_max():
     x_count_b = np.random.randint(0, 5, (ns, 1)) + np.random.randint(0, 1, (ns, n))
     x_count = np.hstack([x_count_a, x_count_b])
 
-    out = sieve.Sieve(max_layers=3, dim_hidden=5, verbose=verbose, seed=seed, k_max=7, n_repeat=10).fit(x_count)
+    out = sieve.Sieve(max_layers=3, dim_hidden=5, verbose=verbose, seed=seed, k_max=8, n_repeat=10).fit(x_count)
     print len(out.layers)
     print x_count[:10]
     print out.layers[0].labels[:10]
@@ -80,9 +80,9 @@ def test_prediction():
         'Check that labels are correct.'
     xbar, labels = s.transform(test_data)
     assert np.allclose(np.where(test_data >= 0, s.invert(xbar) - test_data, 0), 0, atol=0.01), "Invert should be near perfect"
-    print s.predict(labels)[:, 0]
-    print s.predict(labels)[:, 1]
-    assert np.allclose(s.predict(labels)[:, 0], test_data[:, -1], atol=0.15), "Prediction should be close"  # Interesting reason for discrepancy here...
+    print s.predict2(labels)[:, 0]
+    print s.predict2(labels)[:, 1]
+    assert np.allclose(s.predict2(labels)[:, 0], test_data[:, -1], atol=0.15), "Prediction should be close"  # Interesting reason for discrepancy here...
 
 def test_structure():
     # Gets stuck for some seeds.
@@ -101,7 +101,7 @@ def test_vis():
     xb = np.random.randint(0, 3, (ns, 1))
     xc = np.random.randint(0, 3, (ns, 1))
     test_data = np.hstack([np.repeat(xa, 7, axis=1), np.repeat(xb, 5, axis=1), np.repeat(xc, 3, axis=1)])
-    s = sieve.Sieve(max_layers=2, k_max=3, dim_hidden=3, verbose=verbose, seed=seed, n_repeat=1).fit(test_data)
+    s = sieve.Sieve(max_layers=4, k_max=3, dim_hidden=3, verbose=verbose, seed=seed, n_repeat=20).fit(test_data)
     vis.output_dot(s, filename='test.dot')
     vis.output_plots(s, test_data)
 

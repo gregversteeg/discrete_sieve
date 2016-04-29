@@ -1,13 +1,9 @@
-"""Maximally Informative Representations using CORrelation EXplanation
-
-Greg Ver Steeg and Aram Galstyan. "Maximally Informative
-Hierarchical Representations of High-Dimensional Data"
-AISTATS, 2015. arXiv preprint arXiv:1410.7404.
+"""A special, limited version of CorEx to be used a step in the Info Sieve
 
 Code below written by:
 Greg Ver Steeg (gregv@isi.edu), 2015.
 
-License: Apache V2 (This development version not yet released)
+License: Apache V2
 """
 
 import numpy as np  # Tested with 1.8.0
@@ -29,9 +25,6 @@ class Corex(object):
 
     Parameters
     ----------
-    n_hidden : int, optional, default=2
-        Number of hidden units.
-
     dim_hidden : int, optional, default=2
         Each hidden unit can take dim_hidden discrete values.
 
@@ -86,6 +79,9 @@ class Corex(object):
     [2]     Greg Ver Steeg and Aram Galstyan. "Maximally Informative
             Hierarchical Representations of High-Dimensional Data"
             AISTATS, 2015. arXiv preprint arXiv:1410.7404.
+
+    [3]     Greg Ver Steeg and Aram Galstyan. "The Information Sieve"
+            ICML 2016.
 
     """
     def __init__(self, dim_hidden=2,  # Size of representations
@@ -308,7 +304,7 @@ class Corex(object):
 
     def print_verbose(self):
         if self.verbose:
-            print self.tcs,
+            print self.tcs
 
     def convergence(self):
         if len(self.tc_history) > 10:
