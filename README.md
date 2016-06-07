@@ -5,9 +5,15 @@ about the data. A recent extension allows us to build maximally
 informative representations in an incremental way. The other advantage of this approach is that it keeps track of
  *remainder information*, so that we can enable lossy and lossless compression. 
   
-This is described here: 
-*The Information Sieve*
-Greg Ver Steeg and Aram Galstyan, ICML 2016, http://arxiv.org/abs/1507.02284
+This is described here:  
+*The Information Sieve*  
+Greg Ver Steeg and Aram Galstyan, ICML 2016,  
+http://arxiv.org/abs/1507.02284
+
+A much more practical version of the information sieve for continuous variables is introduced here:  
+*Sifting Common Information from Many Variables*  
+Greg Ver Steeg, Shuyang Gao, Kyle Reing, and Aram Galstyan  
+The code for this version is in this repository: https://github.com/gregversteeg/LinearSieve
 
 Papers describing previous work:     
 *Discovering Structure in High-Dimensional Data Through Correlation Explanation*    
