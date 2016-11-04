@@ -20,7 +20,7 @@ def output_dot(sieve, column_labels=None, max_edges=None, filename='structure.do
     f.write('strict digraph {\n'.encode('utf-8'))
     for i, column_label in enumerate(column_labels):
         line = '%s [label="%s", shape=none]\n' % ('X_' + column_label, column_label)
-        # f.write(line.encode('utf-8'))
+        f.write(line.encode('utf-8'))
     for j, layer in enumerate(sieve.layers):
         this_tc = 0.6 * sieve.tcs[j] / np.max(sieve.tcs)
         line = 'Y_%d [shape=circle,margin="0,0",style=filled,fillcolor=black,' \
@@ -28,7 +28,6 @@ def output_dot(sieve, column_labels=None, max_edges=None, filename='structure.do
         f.write(line.encode('utf-8'))
     mis = sieve.mis
     print 'mis', mis
-    print mis > 0.
     if max_edges is None or max_edges > mis.size:
         w_threshold = 0.
     else:
@@ -38,7 +37,7 @@ def output_dot(sieve, column_labels=None, max_edges=None, filename='structure.do
             w = mis[j, i] / np.log(2)
             if w > w_threshold:
                 line = '%s -> %s [penwidth=%0.3f, weight=%0.3f];\n' % ('X_'+str(i), 'Y_'+str(j), 2 * w, w)
-                #f.write(line.encode('utf-8'))
+                f.write(line.encode('utf-8'))
         for j2 in range(0, j):
             w = mis[j, sieve.n_variables + j2] / np.log(2)
             if w > w_threshold:

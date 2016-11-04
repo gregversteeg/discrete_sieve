@@ -85,8 +85,8 @@ class Corex(object):
 
     """
     def __init__(self, dim_hidden=2,  # Size of representations
-                 batch_size=1e6, max_iter=50, n_repeat=1,  # Computational limits
-                 eps=1e-5, smooth_marginals=True,    # Parameters
+                 batch_size=1e6, max_iter=200, n_repeat=1,  # Computational limits
+                 eps=1e-5, smooth_marginals=False,    # Parameters
                  missing_values=-1, seed=None, verbose=False):
 
         self.dim_hidden = dim_hidden  # Each hidden factor can take dim_hidden discrete values
