@@ -31,7 +31,7 @@ http://fonnesbeck.github.io/ScipySuperpack/
 
 To install, download using the link on the right or clone the project by executing this command in your target directory:
 ```
-git clone https://github.com/gregversteeg/sieve.git
+git clone git://github.com/gregversteeg/discrete_sieve.git
 ```
 Use *git pull* to get updates. The code is under heavy development. 
 Please feel free to raise issues or request features using the github interface. 
